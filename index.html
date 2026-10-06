@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>校正フィードバックツール</title>
+<style>
+:root{--bg:#f5f6f8;--pn:#fff;--tx:#1f2430;--mu:#6b7280;--bd:#e2e5ea;--ac:#e5484d;--bl:#2563eb;--hl:#fff3cd;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14161a;--pn:#1d2026;--tx:#e8eaee;--mu:#9aa1ad;--bd:#2d323b;--hl:#4a3f1a}}
+:root[data-theme="dark"]{--bg:#14161a;--pn:#1d2026;--tx:#e8eaee;--mu:#9aa1ad;--bd:#2d323b;--hl:#4a3f1a}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--tx);font:14px/1.5 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;display:flex;flex-direction:column}
+header{display:flex;gap:8px;align-items:center;padding:8px 12px;background:var(--pn);border-bottom:1px solid var(--bd)}
+header input{flex:1;font-size:15px;font-weight:600}
+input,textarea,select,button{font:inherit;color:inherit;background:var(--pn);border:1px solid var(--bd);border-radius:6px;padding:6px 8px}
+button{cursor:pointer}button.pri{background:var(--bl);color:#fff;border-color:var(--bl)}
+main{flex:1;display:grid;grid-template-columns:200px 1fr 320px;min-height:0}
+aside{background:var(--pn);overflow:auto;padding:10px}
+#left{border-right:1px solid var(--bd)}#right{border-left:1px solid var(--bd)}
+.tn{border:2px solid var(--bd);border-radius:6px;margin-bottom:10px;cursor:pointer;position:relative;overflow:hidden;background:var(--bg)}
+.tn.on{border-color:var(--bl)}.tn img{width:100%;display:block;max-height:140px;object-fit:cover;object-position:top}
+.tn .t{font-size:12px;padding:3px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tn .c{position:absolute;top:4px;right:4px;background:var(--ac);color:#fff;border-radius:10px;padding:0 7px;font-size:11px}
+.ph{height:80px;display:flex;align-items:center;justify-content:center;color:var(--mu);font-size:12px}
+#center{overflow:auto;padding:16px;display:flex;flex-direction:column;align-items:center}
+#bar{display:flex;gap:6px;width:100%;margin-bottom:10px}#bar input{flex:1}
+#stage{position:relative;max-width:100%;line-height:0;cursor:crosshair;user-select:none;touch-action:none;box-shadow:0 2px 12px rgba(0,0,0,.2)}
+#stage img{max-width:100%;display:block;pointer-events:none}
+.rg{position:absolute;border:2px solid var(--ac);background:rgba(229,72,77,.12);cursor:pointer}
+.rg.on{background:rgba(229,72,77,.3);box-shadow:0 0 0 3px rgba(229,72,77,.4)}
+.rg b{position:absolute;top:-12px;left:-12px;background:var(--ac);color:#fff;border-radius:50%;width:22px;height:22px;line-height:22px;text-align:center;font-size:12px}
+.flash{animation:fl 1s}@keyframes fl{50%{background:rgba(255,200,0,.6)}}
+.cm{border:1px solid var(--bd);border-radius:8px;padding:8px;margin-bottom:10px;cursor:pointer}
+.cm.on{background:var(--hl);border-color:#e0a800}
+.cm .h{display:flex;align-items:center;gap:6px;margin-bottom:6px}.cm .h b{background:var(--ac);color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;font-size:12px;line-height:22px}
+.cm textarea{width:100%;min-height:64px;resize:vertical}.cm small{color:var(--mu)}
+.fl{font-size:12px;color:var(--mu)}.empty{color:var(--mu);text-align:center;margin-top:30px}
+#dlg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:9}
+#dlg>div{background:var(--pn);padding:18px;border-radius:10px;width:min(440px,92vw);display:grid;gap:8px}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:8px;display:none;z-index:10}
+.view #left .add,.view .edit{display:none!important}.view #stage{cursor:default}
+@media(max-width:800px){main{grid-template-columns:1fr;grid-auto-rows:auto;overflow:auto}#left,#right{border:0}}
+</style></head>
+<body>
+<header>
+<input id="ptitle" placeholder="一括修正のタイトル（例：トップページ修正依頼 10/6）">
+<button class="edit" id="bView">閲覧表示で確認</button>
+<button class="pri edit" id="bShare">共有URLを作成</button>
+</header>
+<main>
+<aside id="left"><button class="add" id="bAdd" style="width:100%;margin-bottom:10px">＋ ページ追加</button><div id="pages"></div></aside>
+<section id="center">
+<div id="bar"><input id="ctitle" placeholder="ページタイトル"><button id="bOpen" title="元のページを開く">元ページへ ↗</button></div>
+<div id="stageWrap" style="width:100%;display:flex;justify-content:center"></div>
+</section>
+<aside id="right"><div id="cms"></div></aside>
+</main>
+
+<div id="dlg"><div>
+<b>ページを追加</b>
+<input id="u" placeholder="https://example.com">
+<select id="dev"><option value="pc">PC（幅1280px）</option><option value="sp">スマホ（幅390px）</option></select>
+<div class="fl">Basic認証（必要な場合のみ）</div>
+<input id="ba" placeholder="ユーザー名" autocomplete="off"><input id="bp" type="password" placeholder="パスワード" autocomplete="off">
+<button class="pri" id="bCap">URLからキャプチャ取得</button>
+<div class="fl">または画像をアップロード</div>
+<input id="fi" type="file" accept="image/*">
+<button id="bCancel">閉じる</button>
+</div></div>
+<div id="toast"></div>
+
+<script>
+// ★ バックエンドのURLを設定（例: "https://your-server.example.com"）。空の場合はデモ動作。
+const API_BASE="";
+const $=s=>document.querySelector(s), uid=()=>Math.random().toString(36).slice(2,9);
+let P={title:"",pages:[]}, cur=null, sel=null, viewer=false;
+const page=()=>P.pages.find(p=>p.id===cur);
+function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(t._t);t._t=setTimeout(()=>t.style.display="none",3500)}
+const readFile=f=>new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result);x.readAsDataURL(f)});
+
+function addPage(o){const p={id:uid(),title:"",url:"",img:"",n:0,regions:[],...o};P.pages.push(p);cur=p.id;sel=null;renderAll()}
+
+/* ---- ページ追加 ---- */
+$("#bAdd").onclick=()=>$("#dlg").style.display="flex";
+$("#bCancel").onclick=()=>$("#dlg").style.display="none";
+$("#fi").onchange=async e=>{const f=e.target.files[0];if(!f)return;addPage({title:f.name,img:await readFile(f)});e.target.value="";$("#dlg").style.display="none"};
+$("#bCap").onclick=async()=>{
+  const url=$("#u").value.trim();if(!/^https?:\/\//.test(url))return toast("http(s)から始まるURLを入力してください");
+  if(!API_BASE){addPage({title:new URL(url).hostname,url});$("#dlg").style.display="none";return toast("デモ: API_BASE未設定のため自動キャプチャ不可。画像を添付してください")}
+  const user=$("#ba").value;
+  try{toast("キャプチャ取得中…");
+    const r=await fetch(API_BASE+"/api/capture",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({url,device:$("#dev").value,basicAuth:user?{user,pass:$("#bp").value}:null})});
+    if(!r.ok)throw 0;const d=await r.json(); // {title, image(dataURL)}
+    addPage({title:d.title||url,url,img:d.image});$("#dlg").style.display="none";toast("取得しました")
+  }catch(e){toast("キャプチャ取得に失敗しました")}
+};
+$("#ctitle").oninput=e=>{const p=page();if(p){p.title=e.target.value;renderPages()}};
+$("#ptitle").oninput=e=>P.title=e.target.value;
+$("#bOpen").onclick=()=>{const p=page();p&&p.url?open(p.url,"_blank","noopener"):toast("元URLがありません")};
+
+/* ---- 描画 ---- */
+function renderAll(){renderPages();renderStage();renderComments();const p=page();$("#ctitle").value=p?p.title:"";$("#ctitle").disabled=viewer;$("#bOpen").style.display=p&&p.url?"":"none"}
+function renderPages(){const el=$("#pages");el.innerHTML="";
+  P.pages.forEach(p=>{const d=document.createElement("div");d.className="tn"+(p.id===cur?" on":"");
+    d.innerHTML=(p.img?`<img alt="">`:`<div class="ph">画像なし</div>`)+`<div class="t"></div>`+(p.regions.length?`<span class="c">${p.regions.length}</span>`:"");
+    if(p.img)d.querySelector("img").src=p.img;d.querySelector(".t").textContent=p.title||"(無題)";
+    d.onclick=()=>{cur=p.id;sel=null;renderAll()};el.appendChild(d)})}
+function renderStage(){const w=$("#stageWrap");w.innerHTML="";const p=page();
+  if(!p){w.innerHTML='<div class="empty">左上の「ページ追加」から始めてください</div>';return}
+  if(!p.img){const d=document.createElement("div");d.className="empty";d.innerHTML='キャプチャ画像がありません。<br><input type="file" accept="image/*">';
+    d.querySelector("input").onchange=async e=>{p.img=await readFile(e.target.files[0]);renderAll()};w.appendChild(d);return}
+  const s=document.createElement("div");s.id="stage";const im=new Image();im.src=p.img;s.appendChild(im);w.appendChild(s);
+  p.regions.forEach(r=>{const d=document.createElement("div");d.className="rg"+(r.id===sel?" on":"");d.dataset.id=r.id;
+    Object.assign(d.style,{left:r.x*100+"%",top:r.y*100+"%",width:r.w*100+"%",height:r.h*100+"%"});d.innerHTML=`<b>${r.n}</b>`;
+    d.onpointerdown=e=>e.stopPropagation();d.onclick=e=>{e.stopPropagation();focusRegion(r.id,"region")};s.appendChild(d)});
+  if(viewer)return;
+  let st=null,tmp=null;
+  s.onpointerdown=e=>{const b=s.getBoundingClientRect();st={x:e.clientX-b.left,y:e.clientY-b.top,b};
+    tmp=document.createElement("div");tmp.className="rg";s.appendChild(tmp);s.setPointerCapture(e.pointerId)};
+  s.onpointermove=e=>{if(!st)return;const x=Math.min(Math.max(e.clientX-st.b.left,0),st.b.width),y=Math.min(Math.max(e.clientY-st.b.top,0),st.b.height);
+    Object.assign(tmp.style,{left:Math.min(st.x,x)+"px",top:Math.min(st.y,y)+"px",width:Math.abs(x-st.x)+"px",height:Math.abs(y-st.y)+"px"})};
+  s.onpointerup=e=>{if(!st)return;const b=st.b,x=Math.min(Math.max(e.clientX-b.left,0),b.width),y=Math.min(Math.max(e.clientY-b.top,0),b.height);
+    const w=Math.abs(x-st.x),h=Math.abs(y-st.y);tmp.remove();
+    if(w>8&&h>8){const r={id:uid(),n:++p.n,x:Math.min(st.x,x)/b.width,y:Math.min(st.y,y)/b.height,w:w/b.width,h:h/b.height,comment:"",files:[]};
+      p.regions.push(r);sel=r.id;renderPages();renderStage();renderComments();focusRegion(r.id,"new")}
+    st=null}}
+function renderComments(){const el=$("#cms");el.innerHTML="";const p=page();
+  if(!p||!p.regions.length){el.innerHTML='<div class="empty">画像上をドラッグして修正箇所を指定すると、ここにコメント欄が表示されます</div>';return}
+  p.regions.forEach(r=>{const d=document.createElement("div");d.className="cm"+(r.id===sel?" on":"");d.dataset.id=r.id;
+    d.innerHTML=`<div class="h"><b>${r.n}</b><span style="flex:1"></span><button class="edit del">削除</button></div><textarea placeholder="修正内容を入力"></textarea><div class="edit"><input type="file" multiple style="width:100%;margin-top:6px"></div><div class="fl files"></div>`;
+    const ta=d.querySelector("textarea");ta.value=r.comment;ta.readOnly=viewer;ta.oninput=()=>r.comment=ta.value;
+    const fl=()=>{const f=d.querySelector(".files");f.innerHTML="";r.files.forEach(x=>{const a=document.createElement("a");a.textContent="📎 "+x.name;a.href=x.data;a.download=x.name;a.style.display="block";a.onclick=e=>e.stopPropagation();f.appendChild(a)})};fl();
+    d.querySelector("input[type=file]")?.addEventListener("change",async e=>{for(const f of e.target.files)r.files.push({name:f.name,data:await readFile(f)});fl();e.target.value=""});
+    d.querySelector(".del")?.addEventListener("click",e=>{e.stopPropagation();p.regions=p.regions.filter(x=>x!==r);if(sel===r.id)sel=null;renderAll()});
+    d.onclick=()=>focusRegion(r.id,"comment");el.appendChild(d)})}
+
+/* ---- 相互ハイライト ---- */
+function focusRegion(id,from){sel=id;
+  document.querySelectorAll(".rg[data-id]").forEach(e=>e.classList.toggle("on",e.dataset.id===id));
+  document.querySelectorAll(".cm").forEach(e=>e.classList.toggle("on",e.dataset.id===id));
+  const rg=document.querySelector(`.rg[data-id="${id}"]`),cm=document.querySelector(`.cm[data-id="${id}"]`);
+  if(from==="comment"&&rg){rg.scrollIntoView({behavior:"smooth",block:"center",inline:"center"});rg.classList.remove("flash");void rg.offsetWidth;rg.classList.add("flash")}
+  if((from==="region"||from==="new")&&cm){cm.scrollIntoView({behavior:"smooth",block:"center"});if(from==="new")cm.querySelector("textarea").focus()}}
+
+/* ---- 共有 ---- */
+$("#bView").onclick=()=>{viewer=!viewer;document.body.classList.toggle("view",viewer);$("#bView").textContent=viewer?"編集に戻る":"閲覧表示で確認";$("#bView").classList.remove("edit");renderAll()};
+$("#bShare").onclick=async()=>{
+  if(!P.title.trim())return toast("先に一括修正のタイトルを入力してください");
+  if(!API_BASE){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(P)],{type:"application/json"}));a.download=P.title+".json";a.click();return toast("デモ: API_BASE未設定のためJSONを保存しました")}
+  try{const r=await fetch(API_BASE+"/api/projects",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(P)});
+    const {id}=await r.json();const link=location.origin+location.pathname+"?view="+id;
+    try{await navigator.clipboard.writeText(link)}catch(e){}prompt("共有URL（閲覧専用）",link)}catch(e){toast("共有URLの作成に失敗しました")}};
+(async()=>{const id=new URLSearchParams(location.search).get("view");
+  if(id&&API_BASE){try{P=await (await fetch(API_BASE+"/api/projects/"+id)).json();$("#ptitle").value=P.title;$("#ptitle").readOnly=true;
+    viewer=true;document.body.classList.add("view");cur=P.pages[0]?.id;renderAll();return}catch(e){toast("読み込みに失敗しました")}}
+  renderAll()})();
+</script></body></html>
